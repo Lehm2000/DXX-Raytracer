@@ -191,6 +191,39 @@ RT_LightDefinition g_light_definitions[] =
 		.spot_angle = 0.3f,
 		.spot_softness = 0.2f,
 	},
+	{
+		.name = "metl126",
+		.kind = RT_LightKind_Area_Rect,
+		.emission = {1.f,1.f,1.f},
+		.radius = 0.4f,
+		.spot_angle = 0.3f,
+		.spot_softness = 0.2f,
+	},
+	{
+		.name = "metl133",
+		.kind = RT_LightKind_Area_Rect,
+		.emission = {1.f,0.f,0.f},
+		.radius = 0.4f,
+		.spot_angle = 0.3f,
+		.spot_softness = 0.2f,
+	},
+	{
+		.name = "metl134",
+		.kind = RT_LightKind_Area_Rect,
+		.emission = {0.f,0.f,1.f},
+		.radius = 0.4f,
+		.spot_angle = 0.3f,
+		.spot_softness = 0.2f,
+	},
+	{
+		.name = "metl135",
+		.kind = RT_LightKind_Area_Rect,
+		.emission = {1.f,1.f,0.f},
+		.radius = 0.4f,
+		.spot_angle = 0.3f,
+		.spot_softness = 0.2f,
+	},
+
 };
 
 static RT_LightDefinition g_default_light_definitions[RT_ARRAY_COUNT(g_light_definitions)];
