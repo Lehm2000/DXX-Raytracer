@@ -9,9 +9,13 @@ struct PrimaryRayPayload
     uint primitive_idx;
     float2 barycentrics;
     float hit_distance;
-    int num_portal_hits;
-    PortalHit portal_hits[128];
+    //int num_portal_hits;
+    //PortalHit portal_hits[128];
+    int segment_start;              // what segment did the ray start in.
+    int segment_tracker[800];       // used to track path of the ray through the segments, if a ray enters a segment the segment it entered from into will be placed in the coresponding index.  Enabling
+                                    // the ability to trace the ray back.  Normally segments are zero based, but when placed in the array, 1 should be added, as 0 needs to represent no data.
     bool valid_hit;
+    int segment_tracker_result;
 };
 
 void TracePrimaryRay(RayDesc ray, inout PrimaryRayPayload payload, uint2 pixel_pos)
@@ -50,14 +54,16 @@ void TracePrimaryRay(RayDesc ray, inout PrimaryRayPayload payload, uint2 pixel_p
                 if (hit_triangle.portal)
                 {
                     
-                    if (payload.num_portal_hits < 127)
+                    payload.segment_tracker[hit_triangle.segment_adjacent] = hit_triangle.segment + 1;
+
+                    /*if (payload.num_portal_hits < 127)
                     {
                         payload.num_portal_hits++;
                         payload.portal_hits[payload.num_portal_hits - 1 ].segment = hit_triangle.segment;
                         payload.portal_hits[payload.num_portal_hits - 1 ].segment_adjacent = hit_triangle.segment_adjacent;
                         payload.portal_hits[payload.num_portal_hits - 1 ].hit_distance = hit_distance;
                         
-                    }
+                    }*/
                     
                     break;  // always don't commit portal hits
                 }
@@ -80,13 +86,14 @@ void TracePrimaryRay(RayDesc ray, inout PrimaryRayPayload payload, uint2 pixel_p
                     // count a transparent wall as a portal
                     if (hit_triangle.segment != -1)
                     {
-                        if (payload.num_portal_hits < 127)
+                        payload.segment_tracker[hit_triangle.segment_adjacent] = hit_triangle.segment + 1;
+                        /*if (payload.num_portal_hits < 127)
                         {
                             payload.num_portal_hits++;
                             payload.portal_hits[payload.num_portal_hits - 1 ].segment = hit_triangle.segment;
                             payload.portal_hits[payload.num_portal_hits - 1 ].segment_adjacent = hit_triangle.segment_adjacent;
                             payload.portal_hits[payload.num_portal_hits - 1 ].hit_distance = hit_distance;
-                        }
+                        }*/
                     }
                 }
 				break;
@@ -116,50 +123,52 @@ void TracePrimaryRay(RayDesc ray, inout PrimaryRayPayload payload, uint2 pixel_p
             RT_Triangle hit_triangle = GetHitTriangle(instance_data.triangle_buffer_idx, primitive_idx);
             payload.valid_hit = true;
 
+            //for (int cache_index = 0; cache_index < 800; cache_index++)
+            //{
+                //payload.segment_tracker_result = payload.segment_tracker[cache_index];
+            //}
+
             // if hit triangle is world geo (has segment) retrace the ray back to see if it passed through portals that lead to this triangle.  otherwise hit is invalid
-            if (hit_triangle.segment != -1)
-            {
+            //if (hit_triangle.segment != -1)
+            //{
+                payload.valid_hit = false;
                 
-                bool valid_hit = false;
+                //bool valid_hit = false;
+
+                // verify ray actually entered the segment this triangle is in
                 int search_segment = hit_triangle.segment;
-                uint retrace_count = 0;
 
-                
-                while (retrace_count < 2)  // retracing back through 2 portals seems to be enough to rid of most artifacts
+                int score = 0;
+
+                score += (hit_triangle.segment == -1) * 11;					// not level geo, always valid
+                score += (search_segment == payload.segment_start) * 11;    // is triangle in same segment as player
+                //for (int i = 0; i < 800; i++)
+                //{
+                    //if( i == search_segment)
+                        score += (payload.segment_tracker[search_segment] != 0) * 10;    // did the ray enter the segment the triangle is in.
+                //}
+                search_segment = payload.segment_tracker[search_segment] - 1;       // get segment that lead to the previous segment
+                score += (search_segment == payload.segment_start);            //   is this second segment the start segment
+                score += (payload.segment_tracker[search_segment] != 0);      // did the ray pass through the second segment
+
+                payload.valid_hit = score > 10;
+
+
+                /*
+                if (search_segment == payload.segment_start)
                 {
-                    retrace_count++;
-
-                    // check if we have gotten back to the rays origin segment
-                    if (search_segment == payload.portal_hits[0].segment)
-                    {
-                        // we got back to origin, so hit is valid
-                        break;
-                    }
-
-                    bool found = false;
-
-                    // search the portal hits to see if we crossed a portal to get to the current search segment
-                    
-                    for (int search_index = 0; search_index < 127; search_index++)
-                    {
-                        if (payload.portal_hits[search_index].segment_adjacent == search_segment)
-                        {
-                            found = true;
-                            search_segment = payload.portal_hits[search_index].segment; // we'll continue the retrace with this segment on the next loop 
-                            break;
-                        }
-                    }
-
-                    if (!found)
-                    {
-                        // we hit geometry that we didn't cross a portal for.
-                        payload.valid_hit = false;
-                        break;
-                    }
-
+                    payload.valid_hit = true;
                 }
+                else if (payload.segment_tracker[search_segment] != 0)
+                {
+                    int search_segment2 = payload.segment_tracker[search_segment] - 1;
+                    
+                    payload.valid_hit = (search_segment2 == payload.segment_start || payload.segment_tracker[search_segment2] != 0);
+                    
+
+                }*/
                 
-            }
+            //}
 
             if(payload.valid_hit)
             { 

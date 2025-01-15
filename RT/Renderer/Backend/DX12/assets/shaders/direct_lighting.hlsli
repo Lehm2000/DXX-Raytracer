@@ -241,10 +241,11 @@ void CalculateDirectLightingAtSurface(in HitGeometry IN, inout DirectLightingOut
 
 				OcclusionRayPayload occlusion_payload;
 				occlusion_payload.visible = false;
-				occlusion_payload.num_portal_hits = 1;
-				occlusion_payload.portal_hits[0].segment = IN.hit_triangle.segment;	// put starting surface segment as first portal hit
-				occlusion_payload.portal_hits[0].segment_adjacent = -1;
-				occlusion_payload.portal_hits[0].hit_distance = 0.0;
+				occlusion_payload.segment_start = IN.hit_triangle.segment;
+				//occlusion_payload.num_portal_hits = 1;
+				//occlusion_payload.portal_hits[0].segment = IN.hit_triangle.segment;	// put starting surface segment as first portal hit
+				//occlusion_payload.portal_hits[0].segment_adjacent = -1;
+				//occlusion_payload.portal_hits[0].hit_distance = 0.0;
 				occlusion_payload.valid_hit = false;
 				
 				int count = 0;

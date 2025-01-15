@@ -164,10 +164,11 @@ void IndirectLightingInline(COMPUTE_ARGS)
 
 			// Set up geometry input for primary ray trace
 			PrimaryRayPayload ray_payload = (PrimaryRayPayload)0;
-			ray_payload.num_portal_hits = 1;
-			ray_payload.portal_hits[0].segment = hit_triangle.segment;	// put starting segment as first portal hit
-			ray_payload.portal_hits[0].segment_adjacent = -1;	// not an actual portal, so it doesn't have an adjacent
-			ray_payload.portal_hits[0].hit_distance = 0.0;
+			//ray_payload.num_portal_hits = 1;
+			//ray_payload.portal_hits[0].segment = hit_triangle.segment;	// put starting segment as first portal hit
+			//ray_payload.portal_hits[0].segment_adjacent = -1;	// not an actual portal, so it doesn't have an adjacent
+			//ray_payload.portal_hits[0].hit_distance = 0.0;
+			ray_payload.segment_start = hit_triangle.segment;
 			ray_payload.valid_hit = false;
 
 			RayDesc ray   = (RayDesc)0;
@@ -186,7 +187,7 @@ void IndirectLightingInline(COMPUTE_ARGS)
 				if (!ray_payload.valid_hit)
 				{
 					// we finished, but the result wasn't valid (usually intersecting sector hit).  update ray to set min dist after the invalid hit and send again
-					ray.TMin = ray_payload.hit_distance + 0.01; // offset to avoid re-intersect
+					ray.TMin = ray_payload.hit_distance + 0.001; // offset to avoid re-intersect
 				}
 
 				count++;
