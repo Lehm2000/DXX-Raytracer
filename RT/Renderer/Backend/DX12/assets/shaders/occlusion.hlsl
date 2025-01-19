@@ -104,7 +104,7 @@ void TraceOcclusionRay(RayDesc ray, inout OcclusionRayPayload payload, uint2 pix
 		payload.valid_hit = true;
 		payload.visible = false;
 
-		if (tweak.retrace_rays)
+		if (tweak.retrace_rays && payload.start_segment != -1)
 		{
 			int hit_score = 0;
 
@@ -142,6 +142,7 @@ void TraceOcclusionRay(RayDesc ray, inout OcclusionRayPayload payload, uint2 pix
 			else
 			{
 				payload.valid_hit = false;
+
 				payload.invalid_primitive_hit = primitive_idx;
 			}
 			
@@ -152,6 +153,7 @@ void TraceOcclusionRay(RayDesc ray, inout OcclusionRayPayload payload, uint2 pix
 	}
 		case COMMITTED_NOTHING:
 		{
+			payload.valid_hit = true;
 			payload.visible = true;
 			break;
 		}

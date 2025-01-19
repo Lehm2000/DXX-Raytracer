@@ -164,6 +164,10 @@ void IndirectLightingRaygen()
 
 			// Set up geometry input for primary ray trace
 			PrimaryRayPayload ray_payload = (PrimaryRayPayload)0;
+			ray_payload.num_portal_hits = 0;
+			ray_payload.start_segment = hit_triangle.segment;
+			ray_payload.invalid_primitive_hit = -1;
+			ray_payload.valid_hit = false;
 			
 			RayDesc ray   = (RayDesc)0;
 			ray.Origin    = gbuf_world_p + 0.01f * gbuf_normal;
