@@ -209,6 +209,9 @@ typedef struct RT_Triangle
 	bool portal;				// is this triangle a portal to another segment
 	int32_t segment;			// what segment does this triangle belong too (if world geo)
 	int32_t segment_adjacent;	// if this is a portal what segment does it lead to
+
+	// terrain
+	bool terrain;				// is this triangle a terrain triangle
 } RT_Triangle;
 
 typedef struct RT_UploadMeshParams

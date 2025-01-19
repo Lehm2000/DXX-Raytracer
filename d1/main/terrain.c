@@ -489,6 +489,7 @@ void load_terrain(char *filename)
 				triangles[n_triangles].portal = false;
 				triangles[n_triangles].segment = -1;
 				triangles[n_triangles].segment_adjacent = -1;
+				triangles[n_triangles].terrain = true;
 
                 n_triangles++;
 
@@ -507,6 +508,7 @@ void load_terrain(char *filename)
 				triangles[n_triangles].portal = false;
 				triangles[n_triangles].segment = -1;
 				triangles[n_triangles].segment_adjacent = -1;
+				triangles[n_triangles].terrain = true;
                 n_triangles++;
             }
         }

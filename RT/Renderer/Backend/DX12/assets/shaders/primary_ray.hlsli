@@ -14,6 +14,8 @@ struct PrimaryRayPayload
     PortalHit portal_hits[RT_NUM_PORTAL_HITS];  // list of last portals crossed
     bool valid_hit;                             // Used to control if a ray needs to be retried due to hitting overlapping segment geometry
     int invalid_primitive_hit;                  // what invalid primitive id was hit (so we can ignore it when we try again)
+    bool hit_terrain;                           // has the ray hit terrain
+
 
 };
 
@@ -64,6 +66,18 @@ void TracePrimaryRay(RayDesc ray, inout PrimaryRayPayload payload, uint2 pixel_p
                     break;  // always don't commit portal hits
                 }
 
+                // check for terrain hit
+                if (hit_triangle.terrain)
+                {
+                    // store the hit information but don't commit the hit, because if there is level geometry behind... render that first
+                    payload.hit_terrain = true;
+                    payload.instance_idx = instance_idx;
+                    payload.primitive_idx = primitive_idx;
+                    payload.barycentrics = ray_query.CandidateTriangleBarycentrics();
+                    payload.hit_distance = hit_distance;
+                    break;  
+                }
+
 				Material hit_material;
 
 				// Check for transparency on hit candidate
@@ -102,10 +116,7 @@ void TracePrimaryRay(RayDesc ray, inout PrimaryRayPayload payload, uint2 pixel_p
 	// Determine instance/primitive indices, barycentrics and the hit distance
 	// Default values are set for a ray miss
 
-	payload.instance_idx = ~0;
-	payload.primitive_idx = ~0;
-	payload.barycentrics = float2(0.0, 0.0);
-	payload.hit_distance = RT_RAY_T_MAX;
+	
 
 	switch (ray_query.CommittedStatus())
 	{
@@ -176,8 +187,17 @@ void TracePrimaryRay(RayDesc ray, inout PrimaryRayPayload payload, uint2 pixel_p
 		// We do not need this case because we initialize the values by default to be as if the ray missed
 		case COMMITTED_NOTHING:
 		{
-			// Missed
+			
             payload.valid_hit = true;   // a miss is still a valid result
+                                        
+            // Missed level geo... check also missed terrain along the way
+            if (!payload.hit_terrain)
+            {
+                payload.instance_idx = ~0;
+                payload.primitive_idx = ~0;
+                payload.barycentrics = float2(0.0, 0.0);
+                payload.hit_distance = RT_RAY_T_MAX;
+            }
 			break;
 		}
 	}

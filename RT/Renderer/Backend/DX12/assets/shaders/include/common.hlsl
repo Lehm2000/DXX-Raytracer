@@ -113,6 +113,9 @@ struct RT_Triangle
 	bool portal;				// is this triangle a portal to another segment
 	int segment;			// what segment does this triangle belong too (if world geo)
 	int segment_adjacent;	// if this is a portal what segment does it lead to
+
+	// terrain
+	bool terrain;				// is this triangle a terrain triangle
 };
 
 // @Volatile: Must match RT_MaterialFlags in Renderer.h
