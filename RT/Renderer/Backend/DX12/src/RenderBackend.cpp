@@ -3087,6 +3087,7 @@ void RenderBackend::BeginScene(const RT_SceneSettings* scene_settings)
 	g_d3d.scene.prev_camera = g_d3d.scene.camera;
 
 	g_d3d.scene.render_segment = scene_settings->render_segment;
+	g_d3d.scene.external = scene_settings->external;
 
 	g_d3d.prev_lights_count = g_d3d.lights_count;
 
@@ -3170,6 +3171,7 @@ void RenderBackend::EndScene()
 			scene_cb->screen_color_overlay = g_d3d.io.screen_overlay_color;
 
 			scene_cb->ray_segment = g_d3d.scene.render_segment;
+			scene_cb->external = g_d3d.scene.external;
 			
 			D3D12_CPU_DESCRIPTOR_HANDLE cbv = frame->descriptors.GetCPUDescriptor(D3D12GlobalDescriptors_CBV_GlobalConstantBuffer);
 

@@ -133,44 +133,74 @@ void TracePrimaryRay(RayDesc ray, inout PrimaryRayPayload payload, uint2 pixel_p
 
             if (tweak.retrace_rays)
             {
-                int hit_score = 0;
-
-                // if hit triangle is world geo (has segment) retrace the ray back to see if it passed through portals that lead to this triangle.  otherwise hit is invalid
-                // checking if it passed through 2 seems to get rid of most of the overlapping geo
-                int search_segment = hit_triangle.segment;
-                hit_score += (search_segment == -1) * 11;  // always render if not world geo (has segment)
-                hit_score += (search_segment == payload.start_segment) * 11;  // triangle is in start segment
-                for (int search_index = 0; search_index < RT_NUM_PORTAL_HITS; search_index++)
+                if (!g_global_cb.external)
                 {
-                    if (payload.portal_hits[search_index].segment_adjacent == search_segment)
+                    int hit_score = 0;
+
+                    // if hit triangle is world geo (has segment) retrace the ray back to see if it passed through portals that lead to this triangle.  otherwise hit is invalid
+                    // checking if it passed through 2 seems to get rid of most of the overlapping geo
+                    int search_segment = hit_triangle.segment;
+                    hit_score += (search_segment == -1) * 11;  // always render if not world geo (has segment)
+                    hit_score += (search_segment == payload.start_segment) * 11;  // triangle is in start segment
+                    for (int search_index = 0; search_index < RT_NUM_PORTAL_HITS; search_index++)
                     {
-                        hit_score += 10;
-                        search_segment = payload.portal_hits[search_index].segment;
-                        break;
+                        if (payload.portal_hits[search_index].segment_adjacent == search_segment)
+                        {
+                            hit_score += 10;
+                            search_segment = payload.portal_hits[search_index].segment;
+                            break;
+                        }
+                    }
+                    hit_score += (search_segment == payload.start_segment);  // new segment is start segment
+                    for (int search_index = 0; search_index < RT_NUM_PORTAL_HITS; search_index++)
+                    {
+                        if (payload.portal_hits[search_index].segment_adjacent == search_segment)
+                        {
+                            hit_score += 1;
+                            search_segment = payload.portal_hits[search_index].segment;
+                            break;
+                        }
+                    }
+
+                    if (hit_score > 10)
+                    {
+                        payload.valid_hit = true;
+                        payload.instance_idx = instance_idx;
+                        payload.primitive_idx = primitive_idx;
+                        payload.barycentrics = ray_query.CommittedTriangleBarycentrics();
+                    }
+                    else
+                    {
+                        payload.valid_hit = false;
+                        payload.invalid_primitive_hit = primitive_idx;
                     }
                 }
-                hit_score += (search_segment == payload.start_segment);  // new segment is start segment
-                for (int search_index = 0; search_index < RT_NUM_PORTAL_HITS; search_index++)
+                else // external 
                 {
-                    if (payload.portal_hits[search_index].segment_adjacent == search_segment)
+                    bool is_geo = hit_triangle.segment != -1;
+                    bool is_start = hit_triangle.segment == payload.start_segment; // triangle is in start segment
+                    bool ray_crossed_start_portal = false;
+                    for (int search_index = 0; search_index < RT_NUM_PORTAL_HITS; search_index++)
                     {
-                        hit_score += 1;
-                        search_segment = payload.portal_hits[search_index].segment;
-                        break;
+                        if (payload.portal_hits[search_index].segment_adjacent == payload.start_segment)
+                        {
+                            ray_crossed_start_portal = true;
+                            break;
+                        }
                     }
-                }
 
-                if (hit_score > 10)
-                {
-                    payload.valid_hit = true;
-                    payload.instance_idx = instance_idx;
-                    payload.primitive_idx = primitive_idx;
-                    payload.barycentrics = ray_query.CommittedTriangleBarycentrics();
-                }
-                else
-                {
-                    payload.valid_hit = false;
-                    payload.invalid_primitive_hit = primitive_idx;
+                    if (!is_geo || is_start || ray_crossed_start_portal)
+                    {
+                        payload.valid_hit = true;
+                        payload.instance_idx = instance_idx;
+                        payload.primitive_idx = primitive_idx;
+                        payload.barycentrics = ray_query.CommittedTriangleBarycentrics();
+                    }
+                    else
+                    {
+                        payload.valid_hit = false;
+                        payload.invalid_primitive_hit = primitive_idx;
+                    }
                 }
             }
             else

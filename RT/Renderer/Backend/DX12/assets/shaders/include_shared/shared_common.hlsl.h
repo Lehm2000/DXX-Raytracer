@@ -95,6 +95,7 @@ struct GlobalConstantBuffer
 
 	// What segment/cube is viewer in
 	int ray_segment;
+	bool external;
 };
 
 struct GenMipMapSettings

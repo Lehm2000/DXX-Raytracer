@@ -285,6 +285,7 @@ typedef struct RT_SceneSettings
 	uint32_t render_height_override;
 	bool render_blit;
 	int32_t render_segment;
+	bool external;
 } RT_SceneSettings;
 
 typedef struct RT_RasterTrianglesParams

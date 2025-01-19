@@ -1073,18 +1073,33 @@ void render_endlevel_frame(fix eye_offset)
 		.near_plane = 0.1f,
 		.far_plane = 10000.0f
 	};
+	
+	bool not_outside = Endlevel_sequence < EL_OUTSIDE;
+	int32_t render_segment;
+
+	if (not_outside)
+	{
+		render_segment = Viewer->segnum;
+	}
+	else
+	{
+		render_segment = exit_segnum;
+	}
+
 	RT_SceneSettings frame_settings =
 	{
 		.camera = &camera,
 		.render_height_override = 0,
 		.render_width_override = 0,
-		.render_segment = Viewer->segnum,
+		.render_segment = render_segment,
+		.external = !not_outside,
+		
 	};
 	RT_BeginScene(&frame_settings);
 	RT_RaytraceSetSkyColors(RT_Vec3Make(0.5, 0.5, 0.5), RT_Vec3Make(0.5, 0.5, 0.5));
 #endif
 
-	if (Endlevel_sequence < EL_OUTSIDE)
+	if (not_outside)
 		endlevel_render_mine(eye_offset);
 	else
 		render_external_scene(eye_offset);

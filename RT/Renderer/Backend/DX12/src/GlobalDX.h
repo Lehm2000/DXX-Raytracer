@@ -461,6 +461,7 @@ namespace RT
 			bool render_blit;
 
 			int32_t render_segment;
+			bool external;			//are we outside the mine
 		} scene;
 
 		RingBuffer resource_upload_ring_buffer;
