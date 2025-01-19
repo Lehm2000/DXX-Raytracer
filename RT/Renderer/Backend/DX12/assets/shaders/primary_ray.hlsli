@@ -168,6 +168,7 @@ void TracePrimaryRay(RayDesc ray, inout PrimaryRayPayload payload, uint2 pixel_p
                         payload.instance_idx = instance_idx;
                         payload.primitive_idx = primitive_idx;
                         payload.barycentrics = ray_query.CommittedTriangleBarycentrics();
+                        payload.hit_distance = hit_distance;
                     }
                     else
                     {
@@ -178,11 +179,11 @@ void TracePrimaryRay(RayDesc ray, inout PrimaryRayPayload payload, uint2 pixel_p
                 else // external 
                 {
                     bool is_geo = hit_triangle.segment != -1;
-                    bool is_start = hit_triangle.segment == payload.start_segment; // triangle is in start segment
+                    bool is_start = hit_triangle.segment == payload.start_segment; // triangle is in start segment (which is exit cube when external)
                     bool ray_crossed_start_portal = false;
                     for (int search_index = 0; search_index < RT_NUM_PORTAL_HITS; search_index++)
                     {
-                        if (payload.portal_hits[search_index].segment_adjacent == payload.start_segment)
+                        if (payload.portal_hits[search_index].segment == payload.start_segment)
                         {
                             ray_crossed_start_portal = true;
                             break;
@@ -195,6 +196,7 @@ void TracePrimaryRay(RayDesc ray, inout PrimaryRayPayload payload, uint2 pixel_p
                         payload.instance_idx = instance_idx;
                         payload.primitive_idx = primitive_idx;
                         payload.barycentrics = ray_query.CommittedTriangleBarycentrics();
+                        payload.hit_distance = hit_distance;
                     }
                     else
                     {
@@ -209,8 +211,10 @@ void TracePrimaryRay(RayDesc ray, inout PrimaryRayPayload payload, uint2 pixel_p
                 payload.instance_idx = instance_idx;
                 payload.primitive_idx = primitive_idx;
                 payload.barycentrics = ray_query.CommittedTriangleBarycentrics();
+                payload.hit_distance = hit_distance;
+                
             }
-            payload.hit_distance = hit_distance;
+            
 
             break;
 		}

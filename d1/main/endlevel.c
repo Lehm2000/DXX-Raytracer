@@ -920,7 +920,10 @@ void render_external_scene(fix eye_offset)
 	ogl_toggle_depth_test(0);
 	Render_depth = (200-(vm_vec_dist_quick(&mine_ground_exit_point, &Viewer_eye)/F1_0))/36;
 #endif
-	RT_RenderLevel(RT_Vec3Fromvms_vector(&Viewer->pos));
+	// only render level if retracing rays are enabled, otherwise whole level will appear on terrain and not just what should be seen through tunnel exit
+	if (RT_GetRetraceRays())
+		RT_RenderLevel(RT_Vec3Fromvms_vector(&Viewer->pos));
+
 	render_terrain(&mine_ground_exit_point,exit_point_bmx,exit_point_bmy);
 #ifdef OGL
 	Render_depth = orig_Render_depth;
