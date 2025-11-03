@@ -230,9 +230,11 @@ namespace RT
 		D3D12GlobalDescriptors_SRV_BlueNoiseFirst,
 		D3D12GlobalDescriptors_SRV_BlueNoiseLast = D3D12GlobalDescriptors_SRV_BlueNoiseFirst + BLUE_NOISE_TEX_COUNT - 1,
 		D3D12GlobalDescriptors_SRV_ImGui,
+		D3D12GlobalDescriptors_SRV_VisibilityTableBuffer,
 
 		D3D12GlobalDescriptors_CBV_GlobalConstantBuffer,
 		D3D12GlobalDescriptors_CBV_TweakVars,
+		
 
 		// ------------------------------------------------------------------
 		// Render targets
@@ -468,6 +470,9 @@ namespace RT
 
 		int upscaling_aa_mode;
 		int amd_fsr2_mode;
+
+		uint32_t visibility_table_segment_count;
+		ID3D12Resource* visibility_table_buffer;
 	};
 
 	extern D3D12State g_d3d;

@@ -1171,6 +1171,7 @@ void ai_move_relative_to_player(object *objp, ai_local *ailp, fix dist_to_player
 
 }
 
+/*
 // --------------------------------------------------------------------------------------------------------------------
 //	Compute a somewhat random, normalized vector.
 void make_random_vector(vms_vector *vec)
@@ -1181,6 +1182,7 @@ void make_random_vector(vms_vector *vec)
 
 	vm_vec_normalize_quick(vec);
 }
+*/
 
 //	-------------------------------------------------------------------------------------------------------------------
 int	Break_on_object = -1;

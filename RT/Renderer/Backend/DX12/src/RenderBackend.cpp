@@ -2102,6 +2102,39 @@ namespace
 		result->triangle_buffer_descriptor = descriptor;
 	}
 
+	struct CreateVisibilityBuffersResult
+	{
+		ID3D12Resource* visibility_table_buffer;
+		DescriptorAllocation visibility_table_buffer_descriptor;
+	};
+
+	void CreateVisibilityTableBuffers(size_t visibility_table_element_count, uint32_t* visibility_table, CreateVisibilityBuffersResult* result)
+	{
+		RT_ZERO_STRUCT(result);
+
+		size_t visibility_table_buffer_size = sizeof(uint32_t) * visibility_table_element_count;
+		//ID3D12Resource* visibility_table_buffer = RT_CreateReadOnlyBuffer(L"Visibility Table Buffer", visibility_table_buffer_size);
+		g_d3d.visibility_table_buffer = RT_CreateReadOnlyBuffer(L"Visibility Table Buffer", visibility_table_buffer_size);
+
+		RingBufferAllocation ring_buf_alloc = WriteToRingBuffer(&g_d3d.resource_upload_ring_buffer, visibility_table_buffer_size, alignof(uint32_t), visibility_table);
+		CommandList& command_list = *ring_buf_alloc.command_list;
+		CopyBufferRegion(command_list, g_d3d.visibility_table_buffer, 0, ring_buf_alloc.resource, ring_buf_alloc.byte_offset, visibility_table_buffer_size);
+
+		DescriptorAllocation descriptor = g_d3d.cbv_srv_uav.Allocate(25);
+		auto visibility_table_srv = descriptor.GetCPUDescriptor(D3D12GlobalDescriptors_SRV_VisibilityTableBuffer);
+		CreateBufferSRV(g_d3d.visibility_table_buffer, visibility_table_srv, 0, (uint32_t)visibility_table_element_count, sizeof(uint32_t));
+
+		ResourceTransition(command_list, g_d3d.visibility_table_buffer, D3D12_RESOURCE_STATE_GENERIC_READ);
+		//g_d3d.command_queue_direct->ExecuteCommandList(command_list);
+
+		//UAVBarrier(command_list, bottom_level_as);
+		//RT_TRACK_TEMP_RESOURCE(g_d3d.visibility_table_buffer, &command_list);
+
+		// do I need these for anything... not currently doing anything with them in the calling function.
+		result->visibility_table_buffer = g_d3d.visibility_table_buffer;
+		result->visibility_table_buffer_descriptor = descriptor;
+	}
+
 	ID3D12Resource* BuildBLAS(size_t triangle_count, RT_Triangle *triangles, D3D12_RAYTRACING_GEOMETRY_FLAGS flags)
 	{
 		size_t vertices_size = triangle_count*3*sizeof(RT_Vec3);
@@ -2292,6 +2325,7 @@ namespace
 			frame->lights = AllocateFromUploadBuffer(frame, sizeof(RT_Light) * RT_MAX_LIGHTS);
 			frame->material_edges = AllocateFromUploadBuffer(frame, sizeof(RT_MaterialEdge) * RT_MAX_MATERIAL_EDGES);
 			frame->material_indices = AllocateFromUploadBuffer(frame, sizeof(uint16_t) * RT_MAX_MATERIALS);
+			frame->visibility_table = AllocateFromUploadBuffer(frame, sizeof(uint32_t) * 282 * RT_MAX_SEGMENTS);  // 282 is the number of uint32_t's to store 9000 segments bit packed.
 
 			frame->upload_buffer_arena_reset = RT_ArenaGetMarker(&frame->upload_buffer_arena);
 		}
@@ -3171,6 +3205,7 @@ void RenderBackend::EndScene()
 			scene_cb->screen_color_overlay = g_d3d.io.screen_overlay_color;
 
 			scene_cb->ray_segment = g_d3d.scene.render_segment;
+			scene_cb->num_segments = g_d3d.visibility_table_segment_count;
 			scene_cb->external = g_d3d.scene.external;
 			
 			D3D12_CPU_DESCRIPTOR_HANDLE cbv = frame->descriptors.GetCPUDescriptor(D3D12GlobalDescriptors_CBV_GlobalConstantBuffer);
@@ -3545,6 +3580,17 @@ RT_ResourceHandle RenderBackend::UploadMesh(const RT_UploadMeshParams& mesh_para
 	resource.triangle_buffer_descriptor = result.triangle_buffer_descriptor;
 
 	return g_mesh_slotmap.Insert(resource);
+}
+
+void RenderBackend::UploadVisibilityTable(const RT_UploadVisibilityTableParams& visibility_params)
+{
+	//does this need a resource handle?
+
+	CreateVisibilityBuffersResult result;
+	CreateVisibilityTableBuffers(visibility_params.visibility_table_element_count, visibility_params.visibility_table, &result);
+
+	g_d3d.visibility_table_segment_count = visibility_params.visibility_table_segment_count;
+	//g_d3d.visibility_table_buffer = result.visibility_table_buffer;
 }
 
 void RenderBackend::ReleaseTexture(const RT_ResourceHandle texture_handle)

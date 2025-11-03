@@ -66,7 +66,7 @@ extern void init_ai_objects(void);
 extern void do_ai_robot_hit(object *robot, int type);
 extern void create_n_segment_path(object *objp, int path_length, int avoid_seg);
 extern void create_n_segment_path_to_door(object *objp, int path_length, int avoid_seg);
-extern void make_random_vector(vms_vector *vec);
+//extern void make_random_vector(vms_vector *vec);
 extern void init_robots_for_level(void);
 extern int ai_behavior_to_mode(int behavior);
 

@@ -906,3 +906,15 @@ bool vm_vec_equal(const vms_vector * v1, const vms_vector * v2) {
 bool vm_mat_equal(const vms_matrix * m1, const vms_matrix * m2) {
 	return vm_vec_equal(&m1->rvec, &m2->rvec) && vm_vec_equal(&m1->uvec, &m2->uvec) && vm_vec_equal(&m1->fvec, &m2->fvec);
 }
+
+
+// --------------------------------------------------------------------------------------------------------------------
+//	Compute a somewhat random, normalized vector.
+void make_random_vector(vms_vector *vec)
+{
+		vec->x = (d_rand() - 16384) | 1;  // make sure we don't create null vector
+		vec->y = d_rand() - 16384;
+		vec->z = d_rand() - 16384;
+
+	vm_vec_normalize_quick(vec);
+}

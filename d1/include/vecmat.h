@@ -452,4 +452,6 @@ void vms_matrix_from_quaternion(vms_matrix * m, const vms_quaternion * q);
 bool vm_vec_equal(const vms_vector * v1, const vms_vector * v2);
 bool vm_mat_equal(const vms_matrix * m1, const vms_matrix * m2);
 
+extern void make_random_vector(vms_vector* vec);
+
 #endif // #ifndef _VECMAT_H

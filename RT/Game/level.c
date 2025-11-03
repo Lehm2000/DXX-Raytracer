@@ -8,6 +8,7 @@
 #include "wall.h"
 #include "automap.h"
 #include "render.h"
+#include "fvi.h"
 
 // ------------------------------------------------------------------
 // RT includes
@@ -25,6 +26,7 @@
 // Current active level
 RT_ResourceHandle g_level_resource = { 0 };
 RT_ResourceHandle g_level_with_portals_resource = { 0 };
+RT_ResourceHandle g_level_visibility_table = { 0 };
 int g_active_level = 0;
 
 int m_light_count = 0;
@@ -140,6 +142,9 @@ bool RT_UploadLevelGeometry(RT_ResourceHandle* level_handle, RT_ResourceHandle* 
 		RT_Triangle* triangles = RT_ArenaAllocArray(&g_thread_arena, Num_segments * 6 * 2, RT_Triangle);
 		RT_Triangle* portal_triangles = RT_ArenaAllocArray(&g_thread_arena, Num_segments * 6 * 2, RT_Triangle);
 
+		uint32_t visibility_table_stride = (Num_segments + 31) / 32;  // make table stride match 32bit gpu data type
+		uint32_t* visibility_table = RT_ArenaAllocArray(&g_thread_arena, visibility_table_stride * Num_segments, uint32_t);
+
 		// Init lights segment id list
 		for (size_t i = 0; i < _countof(m_lights_seg_ids); ++i) {
 			m_lights_seg_ids[i] = -1;
@@ -151,9 +156,99 @@ bool RT_UploadLevelGeometry(RT_ResourceHandle* level_handle, RT_ResourceHandle* 
 		int num_portal_triangles = 0;
 
 		int num_mesh = 0;
+
+		//int visibility_row_size = (Num_segments + 8 - 1) / 8;
+		//char* visibility_table = RT_ArenaAllocArray(&g_thread_arena, visibility_row_size * Num_segments, char);
+
 		for (int seg_id = 0; seg_id < Num_segments; seg_id++)
 		{
 			segment *seg = &Segments[seg_id];
+
+			// compute segment visibility table
+
+			vms_vector seg_center;
+			vm_vec_zero(&seg_center);
+
+			vms_vector start_point;
+			vms_vector end_point;
+
+			compute_segment_center(&seg_center, seg);
+
+			for (int vertex_index = 0; vertex_index <= MAX_VERTICES_PER_SEGMENT; vertex_index++)
+			{
+				vm_vec_zero(&start_point);
+				vm_vec_zero(&end_point);
+
+				if (vertex_index == MAX_VERTICES_PER_SEGMENT)
+				{
+					// do the center point
+					start_point = seg_center;
+				}
+				else
+				{
+					// do one of the vertices slighly offset towards the center
+					vms_vector p1 = Vertices[seg->verts[vertex_index]];
+					vm_vec_scale(&p1, fl2f(0.99f));
+
+					vms_vector p2 = seg_center;
+					vm_vec_scale(&p2, fl2f(0.01f));
+
+					vm_vec_add(&start_point, &p1, &p2);
+				}
+
+				// now shoot a whole bunch of rays from this point and see where they go
+				for (int ray_index = 0; ray_index < 1000; ray_index++)
+				{
+					vms_vector direction;
+					make_random_vector(&direction);
+
+					vm_vec_scale(&direction, fl2f(10000.f));
+
+					vm_vec_add(&end_point, &start_point, &direction);
+
+					int fate;
+					fvi_info hit_info;
+					fvi_query fq;
+
+					fq.p0 = &start_point;
+					fq.startseg = seg_id;
+					fq.p1 = &end_point;
+					fq.rad = 0;
+					fq.thisobjnum = -1;
+					fq.ignore_obj_list = NULL;
+					fq.flags = FQ_TRANSWALL | FQ_GET_SEGLIST;
+
+					fate = find_vector_intersection(&fq, &hit_info);
+
+					/*printf("%d / %d\n", seg_id, Num_segments);
+
+					
+					for (int seg_index = 0; seg_index < hit_info.n_segs; seg_index++)
+					{
+						//sprintf(animation_frame_name, "%s%d", animation_root_name, frame_num);
+						//sprintf(animation_frame_name, "%s%d", animation_root_name, frame_num);
+						printf("%d,", hit_info.seglist[seg_index]);
+					}
+
+					printf("%d,", hit_info.hit_seg);
+
+					printf("\n");*/
+
+					if (fate == HIT_WALL)
+					{
+						//int hit_seghit_info.hit_seg
+						size_t wordIndex = hit_info.hit_seg / 32;
+						size_t bitIndex = hit_info.hit_seg % 32;
+						size_t table_index = ((size_t)seg_id) * ((size_t)visibility_table_stride) + wordIndex;
+
+						visibility_table[table_index] |= (1u << bitIndex);
+
+					}
+					
+
+
+				}
+			}
 
 			for (int side_index = 0; side_index < MAX_SIDES_PER_SEGMENT; side_index++)
 			{
@@ -344,6 +439,24 @@ bool RT_UploadLevelGeometry(RT_ResourceHandle* level_handle, RT_ResourceHandle* 
 		*portals_handle = RT_UploadMesh(&params_portals);
 		RT_LOGF(RT_LOGSERVERITY_INFO, "UPLOADING MESH OK\n");
 
+		// temp output for debugging
+		printf("vis table:\n");
+		for (uint vis_table_index = 0; vis_table_index < visibility_table_stride * Num_segments; vis_table_index++)
+		{
+			printf("%d", visibility_table[vis_table_index]);
+		}
+
+		RT_UploadVisibilityTableParams params_visibility_table =
+		{
+			.visibility_table_segment_count = Num_segments,
+			.visibility_table_element_count = visibility_table_stride * Num_segments,
+			.visibility_table = visibility_table
+		};
+
+		RT_LOGF(RT_LOGSERVERITY_INFO, "UPLOADING VISIBILITY TABLE >>\n");
+		RT_UploadVisibilityTable(&params_visibility_table);
+		RT_LOGF(RT_LOGSERVERITY_INFO, "UPLOADING VISIBILITY TABLE\n");
+
 		// load and unload materials based on if they are needed for this level.
 		RT_SyncMaterialStates();
 	}
@@ -373,6 +486,15 @@ bool RT_UnloadLevel()
 
 		return true;
 	}
+
+	// unload the visibility table
+	/*if (RT_RESOURCE_HANDLE_VALID(g_level_visibility_table))
+	{
+		??RT_ReleaseMesh(g_level_with_portals_resource); its not a mesh so what do I do here?
+		g_level_visibility_table = RT_RESOURCE_HANDLE_NULL;
+
+		return true;
+	}*/
 
 	return false;
 }
