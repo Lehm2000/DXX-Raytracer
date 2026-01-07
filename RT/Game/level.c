@@ -23,6 +23,9 @@
 
 // ------------------------------------------------------------------
 
+#define MAX_VISIBILITY_TABLE_SEARCH_SEGMENTS 9000
+#define MAX_VISIBILITY_TABLE_SEARCH_RAYS 100
+
 // Current active level
 RT_ResourceHandle g_level_resource = { 0 };
 RT_ResourceHandle g_level_with_portals_resource = { 0 };
@@ -125,6 +128,101 @@ void RT_ExtractLightsFromSide(side* side, RT_Vertex* vertices, RT_Vec3 normal, i
 	}
 }
 
+void UpdateVisibilityTable(uint32_t* visibility_table, uint32_t visibility_table_stride, int seg_from, int seg_to)
+{
+	size_t wordIndex = seg_to / 32;
+	size_t bitIndex = seg_to % 32;
+	size_t table_index = ((size_t)seg_from) * ((size_t)visibility_table_stride) + wordIndex;
+
+	visibility_table[table_index] |= (1u << bitIndex);
+}
+
+void pick_random_point_on_side(vms_vector* random_point, const side* s, const int* vertnum_list)
+{
+	// get vertex information
+	vms_vector quad_vertices[4];
+	vms_vector tri_vertices[3];
+
+	for (int vertex_index = 0; vertex_index < 4; vertex_index++)
+	{
+		const int vertex_id = vertnum_list[vertex_index];
+		quad_vertices[vertex_index] = Vertices[vertex_id];
+	}
+
+	// should we pick a point on the first or second triangle of the quad?
+	// picking one randomly should be good enough for most casses, but in the event of a very skewed segment where one triangle is much larger than the other... the results would be skewed
+	// if it becomes a problem look at using triangle size to weight the probability.
+
+	bool first_tri = d_rand() > 16384;
+
+	switch (s->type)
+	{
+	case SIDE_IS_TRI_13:
+
+		if (first_tri)
+		{
+			tri_vertices[0] = quad_vertices[0];
+			tri_vertices[1] = quad_vertices[1];
+			tri_vertices[2] = quad_vertices[3];
+		}
+		else
+		{
+			tri_vertices[0] = quad_vertices[1];
+			tri_vertices[1] = quad_vertices[2];
+			tri_vertices[2] = quad_vertices[3];
+		}
+		break;
+
+	case SIDE_IS_QUAD:
+	case SIDE_IS_TRI_02:
+	default:
+
+		if (first_tri)
+		{
+			tri_vertices[0] = quad_vertices[0];
+			tri_vertices[1] = quad_vertices[1];
+			tri_vertices[2] = quad_vertices[2];
+		}
+		else
+		{
+			tri_vertices[0] = quad_vertices[0];
+			tri_vertices[1] = quad_vertices[2];
+			tri_vertices[2] = quad_vertices[3];
+		}
+		break;
+
+	}
+
+	int u = d_rand() * 2;	// d_rand only returns 0.0 to 0.5, so double it
+	int v = d_rand() * 2;
+
+	// if u + v > 1.0 flip them
+	if (u + v > D_RAND_MAX * 2)
+	{
+		u = (D_RAND_MAX * 2) - u;
+		v = (D_RAND_MAX * 2) - v;
+	}
+
+	// create vectors for the two sides connected to vertex 0
+	vms_vector side1, side2;
+	vm_vec_sub(&side1, &tri_vertices[1], &tri_vertices[0]);
+	vm_vec_sub(&side2, &tri_vertices[2], &tri_vertices[0]);
+
+	// scale them by u,v
+	vm_vec_scale(&side1, u);
+	vm_vec_scale(&side2, v);
+
+	// add the two scaled sides together
+	vms_vector offset_vector;
+	vm_vec_add(&offset_vector, &side1, &side2);
+
+	// add offset to vertex 0, we should now have a random point on the side
+	vm_vec_add(random_point, &tri_vertices[0], &offset_vector);
+
+	return;
+	
+}
+
 bool RT_UploadLevelGeometry(RT_ResourceHandle* level_handle, RT_ResourceHandle* portals_handle)
 {
 
@@ -157,98 +255,14 @@ bool RT_UploadLevelGeometry(RT_ResourceHandle* level_handle, RT_ResourceHandle* 
 
 		int num_mesh = 0;
 
-		//int visibility_row_size = (Num_segments + 8 - 1) / 8;
-		//char* visibility_table = RT_ArenaAllocArray(&g_thread_arena, visibility_row_size * Num_segments, char);
+		uint highest_ray_test = 0;
 
 		for (int seg_id = 0; seg_id < Num_segments; seg_id++)
 		{
 			segment *seg = &Segments[seg_id];
 
-			// compute segment visibility table
-
-			vms_vector seg_center;
-			vm_vec_zero(&seg_center);
-
-			vms_vector start_point;
-			vms_vector end_point;
-
-			compute_segment_center(&seg_center, seg);
-
-			for (int vertex_index = 0; vertex_index <= MAX_VERTICES_PER_SEGMENT; vertex_index++)
-			{
-				vm_vec_zero(&start_point);
-				vm_vec_zero(&end_point);
-
-				if (vertex_index == MAX_VERTICES_PER_SEGMENT)
-				{
-					// do the center point
-					start_point = seg_center;
-				}
-				else
-				{
-					// do one of the vertices slighly offset towards the center
-					vms_vector p1 = Vertices[seg->verts[vertex_index]];
-					vm_vec_scale(&p1, fl2f(0.99f));
-
-					vms_vector p2 = seg_center;
-					vm_vec_scale(&p2, fl2f(0.01f));
-
-					vm_vec_add(&start_point, &p1, &p2);
-				}
-
-				// now shoot a whole bunch of rays from this point and see where they go
-				for (int ray_index = 0; ray_index < 1000; ray_index++)
-				{
-					vms_vector direction;
-					make_random_vector(&direction);
-
-					vm_vec_scale(&direction, fl2f(10000.f));
-
-					vm_vec_add(&end_point, &start_point, &direction);
-
-					int fate;
-					fvi_info hit_info;
-					fvi_query fq;
-
-					fq.p0 = &start_point;
-					fq.startseg = seg_id;
-					fq.p1 = &end_point;
-					fq.rad = 0;
-					fq.thisobjnum = -1;
-					fq.ignore_obj_list = NULL;
-					fq.flags = FQ_TRANSWALL | FQ_GET_SEGLIST;
-
-					fate = find_vector_intersection(&fq, &hit_info);
-
-					/*printf("%d / %d\n", seg_id, Num_segments);
-
-					
-					for (int seg_index = 0; seg_index < hit_info.n_segs; seg_index++)
-					{
-						//sprintf(animation_frame_name, "%s%d", animation_root_name, frame_num);
-						//sprintf(animation_frame_name, "%s%d", animation_root_name, frame_num);
-						printf("%d,", hit_info.seglist[seg_index]);
-					}
-
-					printf("%d,", hit_info.hit_seg);
-
-					printf("\n");*/
-
-					if (fate == HIT_WALL)
-					{
-						//int hit_seghit_info.hit_seg
-						size_t wordIndex = hit_info.hit_seg / 32;
-						size_t bitIndex = hit_info.hit_seg % 32;
-						size_t table_index = ((size_t)seg_id) * ((size_t)visibility_table_stride) + wordIndex;
-
-						visibility_table[table_index] |= (1u << bitIndex);
-
-					}
-					
-
-
-				}
-			}
+			// add self to visibility table row
+			UpdateVisibilityTable(visibility_table, visibility_table_stride, seg_id, seg_id);
 
 			for (int side_index = 0; side_index < MAX_SIDES_PER_SEGMENT; side_index++)
 			{
@@ -260,6 +274,119 @@ bool RT_UploadLevelGeometry(RT_ResourceHandle* level_handle, RT_ResourceHandle* 
 				get_side_verts(&vertnum_list, seg_id, side_index);
 
 				int vert_ids[4];
+
+				// compute visibility table for this side
+
+				bool visited[MAX_SEGMENTS] = { false };
+				int search_stack[MAX_VISIBILITY_TABLE_SEARCH_SEGMENTS];
+				for (int i = 0; i < MAX_VISIBILITY_TABLE_SEARCH_SEGMENTS; i++)
+				{
+					search_stack[i] = -1;
+				}
+				int search_stack_size = 0;
+
+				// if side has a connected segment add that to the search pool as search starter.  if there isn't one there will be no search for this side
+				if (seg->children[side_index] > -1)
+				{
+					// this is a portal surface of some kind
+
+					// direct children can always be seen. add it to visibility table
+					UpdateVisibilityTable(visibility_table, visibility_table_stride, seg_id, seg->children[side_index]);
+					UpdateVisibilityTable(visibility_table, visibility_table_stride, seg->children[side_index], seg_id);
+
+					// add this child to the search stack
+					search_stack_size++;
+					search_stack[search_stack_size - 1] = seg->children[side_index];
+				}
+
+				while (search_stack_size > 0)
+				{
+					// pop the last segment from search stack
+					int search_segment_index = search_stack[search_stack_size - 1];
+					search_stack[search_stack_size - 1] = -1;
+					search_stack_size--;
+
+					// if we've visited this segment before, no need to do it again
+					if (!visited[search_segment_index])
+					{
+						segment* search_seg = &Segments[search_segment_index];
+
+						// mark as visited
+						visited[search_segment_index] = true;
+
+						// iterate over the sides of the search segment to see if they are portals that lead to other segments
+
+						for (int search_side_index = 0; search_side_index < MAX_SIDES_PER_SEGMENT; search_side_index++)
+						{
+							if (search_seg->children[search_side_index] > -1)
+							{
+								// this side is a portal to another segment, search it
+								side* search_s = &search_seg->sides[search_side_index];
+
+								// check if this portal can be seen by the portal surface that started this search
+
+								// pick a bunch of random points on the original segment portal surface and a bunch of points on the current portal surface and trace a line between.
+								// if any of those lines are not blocked by anything, they can see each other
+								// which means that the search_segment can see into this child segment
+								// add it to the visibility table
+
+								bool can_see = false;
+								for (uint ray_index = 0; ray_index < MAX_VISIBILITY_TABLE_SEARCH_RAYS && !can_see; ray_index++)
+								{
+									vms_vector start_point, end_point;
+
+									pick_random_point_on_side(&start_point, s, vertnum_list);
+
+									int search_s_vertnum_list[4];
+									get_side_verts(&search_s_vertnum_list, search_segment_index, search_side_index);
+									pick_random_point_on_side(&end_point, search_s, search_s_vertnum_list);
+
+									int fate;
+									fvi_info hit_info;
+									fvi_query fq;
+
+									fq.startseg = seg_id;
+									fq.p0 = &start_point;
+									fq.p1 = &end_point;
+									fq.rad = 0;
+									fq.thisobjnum = -1;
+									fq.ignore_obj_list = NULL;
+									fq.flags = FQ_ALL_CHILDREN;
+
+									fate = find_vector_intersection(&fq, &hit_info);
+
+									if (fate == HIT_NONE)
+									{
+										// clean line of sight.  update visibility table and end search for this side
+										can_see = true;
+
+										UpdateVisibilityTable(visibility_table, visibility_table_stride, seg_id, search_seg->children[search_side_index]);
+										UpdateVisibilityTable(visibility_table, visibility_table_stride, search_seg->children[search_side_index], seg_id);
+
+										// add this child to the search stack
+
+										if(search_stack_size < MAX_VISIBILITY_TABLE_SEARCH_SEGMENTS)
+										{ 
+											search_stack_size++;
+											search_stack[search_stack_size - 1] = search_seg->children[search_side_index];
+										}
+
+										if (ray_index > highest_ray_test)
+										{
+											highest_ray_test = ray_index;
+										}
+
+									}
+								}
+							}
+						}
+					}
+
+				}
+					
+				// end visibility table calculation
+
+				// begin geometry extraction
 
 				for (int v = 0; v < 4; v++)
 				{

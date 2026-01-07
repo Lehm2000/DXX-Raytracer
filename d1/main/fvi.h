@@ -106,6 +106,7 @@ typedef struct fvi_info {
 #define FQ_TRANSWALL		2		//go through transparent walls
 #define FQ_TRANSPOINT	4		//go through trans wall if hit point is transparent
 #define FQ_GET_SEGLIST	8		//build a list of segments
+#define FQ_ALL_CHILDREN 16		// traverse all children (ignoring if there is wall or door in way)
 
 //this data contains the parms to fvi()
 typedef struct fvi_query {

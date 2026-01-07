@@ -2325,8 +2325,7 @@ namespace
 			frame->lights = AllocateFromUploadBuffer(frame, sizeof(RT_Light) * RT_MAX_LIGHTS);
 			frame->material_edges = AllocateFromUploadBuffer(frame, sizeof(RT_MaterialEdge) * RT_MAX_MATERIAL_EDGES);
 			frame->material_indices = AllocateFromUploadBuffer(frame, sizeof(uint16_t) * RT_MAX_MATERIALS);
-			frame->visibility_table = AllocateFromUploadBuffer(frame, sizeof(uint32_t) * 282 * RT_MAX_SEGMENTS);  // 282 is the number of uint32_t's to store 9000 segments bit packed.
-
+			
 			frame->upload_buffer_arena_reset = RT_ArenaGetMarker(&frame->upload_buffer_arena);
 		}
 	}
@@ -3584,13 +3583,26 @@ RT_ResourceHandle RenderBackend::UploadMesh(const RT_UploadMeshParams& mesh_para
 
 void RenderBackend::UploadVisibilityTable(const RT_UploadVisibilityTableParams& visibility_params)
 {
-	//does this need a resource handle?
+	if (g_d3d.visibility_table_buffer)
+	{
+		// NOTE(daniel): Copying Justin's dirty hack below, defer releasing the old table until we know for sure it's no longer used.
+		CommandList * cmd_list = &g_d3d.command_queue_direct->GetCommandList();
+		RT_TRACK_TEMP_OBJECT(g_d3d.visibility_table_buffer, cmd_list);
+	}
 
-	CreateVisibilityBuffersResult result;
-	CreateVisibilityTableBuffers(visibility_params.visibility_table_element_count, visibility_params.visibility_table, &result);
+	size_t visibility_table_buffer_size = sizeof(uint32_t) * visibility_params.visibility_table_element_count;
+	ID3D12Resource * visibility_table_buffer = RT_CreateReadOnlyBuffer(L"Visibility Table Buffer", visibility_table_buffer_size);
 
+	RingBufferAllocation ring_buf_alloc = WriteToRingBuffer(&g_d3d.resource_upload_ring_buffer, visibility_table_buffer_size, alignof(uint32_t), visibility_params.visibility_table);
+	CommandList & command_list = *ring_buf_alloc.command_list;
+	CopyBufferRegion(command_list, visibility_table_buffer, 0, ring_buf_alloc.resource, ring_buf_alloc.byte_offset, visibility_table_buffer_size);
+	
+	ResourceTransition(command_list, visibility_table_buffer, D3D12_RESOURCE_STATE_GENERIC_READ);
+	
+	g_d3d.visibility_table_buffer = visibility_table_buffer;
+	g_d3d.visibility_table_element_count = visibility_params.visibility_table_element_count;
 	g_d3d.visibility_table_segment_count = visibility_params.visibility_table_segment_count;
-	//g_d3d.visibility_table_buffer = result.visibility_table_buffer;
+
 }
 
 void RenderBackend::ReleaseTexture(const RT_ResourceHandle texture_handle)
@@ -4107,6 +4119,14 @@ void RenderBackend::RaytraceRender()
 
 		D3D12_CPU_DESCRIPTOR_HANDLE srv = frame->descriptors.GetCPUDescriptor(D3D12GlobalDescriptors_SRV_InstanceDataBuffer);
 		CreateBufferSRV(g_d3d.instance_data_buffer, srv, 0, MAX_INSTANCES, sizeof(InstanceData));
+	}
+
+	//------------------------------------------------------------------------
+	// Create SRV for visibility table
+	
+	{
+		D3D12_CPU_DESCRIPTOR_HANDLE srv = frame->descriptors.GetCPUDescriptor(D3D12GlobalDescriptors_SRV_VisibilityTableBuffer);
+		CreateBufferSRV(g_d3d.visibility_table_buffer, srv, 0, (uint32_t)g_d3d.visibility_table_element_count, sizeof(uint32_t));
 	}
 
 	// ------------------------------------------------------------------

@@ -117,13 +117,10 @@ void TracePrimaryRay(RayDesc ray, inout PrimaryRayPayload payload, uint2 pixel_p
                     uint visibility_table_stride = (g_global_cb.num_segments + 31) / 32;
                     uint wordIndex = hit_triangle.segment / 32;
                     uint bitIndex = hit_triangle.segment % 32;
-                    uint table_index = g_global_cb.ray_segment * visibility_table_stride + wordIndex;
+                    uint table_index = payload.start_segment * visibility_table_stride + wordIndex;
 
-                    //segment_visible = (g_visibility_table_buffer[table_index] & (1U << bitIndex)) != 0;
-                    segment_visible = g_visibility_table_buffer[0] != 0; // temp test to see if any data is present in first index. so far this is always 0, despite on cpu array there being data. 
+                    segment_visible = (g_visibility_table_buffer[table_index] & (1U << bitIndex)) != 0;
                 }
-
-                //segment_visible = g_global_cb.num_segments < 300;
 
 				// Check for transparency on hit candidate
                

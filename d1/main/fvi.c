@@ -924,7 +924,8 @@ static int fvi_sub(vms_vector *intp,int *ints,const vms_vector *p0,int startseg,
 							wid_flag = WALL_IS_DOORWAY(seg, side);
 						}
 
-						if ((wid_flag & WID_FLY_FLAG) ||
+						if ( ((flags & FQ_ALL_CHILDREN ) && seg->children[side] >= 0) || 
+							(wid_flag & WID_FLY_FLAG) ||
 							((wid_flag == WID_TRANSPARENT_WALL) && 
 								((flags & FQ_TRANSWALL) || (flags & FQ_TRANSPOINT && check_trans_wall(&hit_point,seg,side,face))))) {
 

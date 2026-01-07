@@ -175,8 +175,8 @@ StructuredBuffer<Material>      g_materials                        : register(t2
 StructuredBuffer<InstanceData>  g_instance_data_buffer             : register(t3);
 ByteAddressBuffer               g_material_edges                   : register(t4);
 ByteAddressBuffer               g_material_indices                 : register(t5);
-Texture2D                       g_blue_noise[BLUE_NOISE_TEX_COUNT] : register(t6);
-StructuredBuffer<uint>          g_visibility_table_buffer		   : register(t23);  // guessing its 23
+StructuredBuffer<uint>          g_visibility_table_buffer		   : register(t6);
+Texture2D                       g_blue_noise[BLUE_NOISE_TEX_COUNT] : register(t7);
 Texture2D						g_bindless_srvs[]				   : register(t0, space3);
 StructuredBuffer<RT_Triangle>	g_bindless_triangle_buffers[]	   : register(t0, space4);
 
