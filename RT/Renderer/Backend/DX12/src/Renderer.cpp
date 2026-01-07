@@ -185,6 +185,11 @@ RT_ResourceHandle RT_UploadMesh(const RT_UploadMeshParams* params)
 	return RenderBackend::UploadMesh(*params);
 }
 
+void RT_UploadVisibilityTable(const RT_UploadVisibilityTableParams* params)
+{
+	RenderBackend::UploadVisibilityTable(*params);
+}
+
 void RT_ReleaseTexture(const RT_ResourceHandle texture_handle)
 {
 	RenderBackend::ReleaseTexture(texture_handle);

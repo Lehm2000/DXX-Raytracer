@@ -41,63 +41,24 @@ void TraceOcclusionRay(RayDesc ray, inout OcclusionRayPayload payload, uint2 pix
 
 				bool valid_hit = true;
 
-				if (tweak.retrace_rays && payload.start_segment != -1)  // retrace rays to handle intersecting level segments
+				
+
+				bool segment_visible = true;
+
+				if (hit_triangle.segment != -1)
 				{
-					// bool found = false;
+					uint visibility_table_stride = (g_global_cb.num_segments + 31) / 32;
+					uint wordIndex = hit_triangle.segment / 32;
+					uint bitIndex = hit_triangle.segment % 32;
+					uint table_index = payload.start_segment * visibility_table_stride + wordIndex;
 
-					 // first check if the hit triangle is part of the segment we are looking for
-					if (hit_triangle.segment != -1 && hit_triangle.segment != payload.start_segment)
-					{
-						// if not, setup a retrace ray that starts at the hit location and shoots back to the viewer
-						float3 newOrigin = ray.Origin + (ray.Direction * hit_distance);
-						RayDesc retrace_ray;
-						retrace_ray.Origin = newOrigin;
-						retrace_ray.Direction = ray.Direction * -1.0;
-						retrace_ray.TMin = 0.0;
-						retrace_ray.TMax = hit_distance + 1.0;	// add just a little bit to distance... it helps when the camera is close to a portal surface.
-
-						// setup retrace to check if it passes through portal that leads to segment hit happened in.
-						PortalRetraceRayPayload retrace_payload;
-						retrace_payload.search_segment = hit_triangle.segment;
-						retrace_payload.found = false;
-						retrace_payload.hit_distance = RT_RAY_T_MAX;
-						retrace_payload.next_segment = -1;
-
-						TracePortalRetraceRay(retrace_ray, retrace_payload, pixel_pos, false);
-
-						// retrace did pass through portal that leads to where the hit happened
-						if (retrace_payload.found)
-						{
-							// does that portal lead to where the player ship is?
-							if (retrace_payload.next_segment != payload.start_segment)
-							{
-								// if it does not, do one more retrace
-								retrace_payload.search_segment = retrace_payload.next_segment;
-								retrace_payload.found = false;
-								retrace_payload.hit_distance = RT_RAY_T_MAX;
-								retrace_payload.next_segment = -1;
-
-								TracePortalRetraceRay(retrace_ray, retrace_payload, pixel_pos, false);
-								if (!retrace_payload.found)
-								{
-									// failed second retrace, not valid hit
-									valid_hit = false;
-								}
-							}
-
-						}
-						else
-						{
-							valid_hit = false;
-						}
-					}
-
+					segment_visible = (g_visibility_table_buffer[table_index] & (1U << bitIndex)) != 0;
 				}
 
 				Material hit_material;
 
 				
-				if (valid_hit && !IsHitTransparent(
+				if (valid_hit && segment_visible && !IsHitTransparent(
 					ray_query.CandidateInstanceIndex(),
 					ray_query.CandidatePrimitiveIndex(),
 					ray_query.CandidateTriangleBarycentrics(),

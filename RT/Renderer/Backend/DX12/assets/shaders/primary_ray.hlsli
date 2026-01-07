@@ -38,7 +38,7 @@ void TracePrimaryRay(RayDesc ray, inout PrimaryRayPayload payload, uint2 pixel_p
 		switch (ray_query.CandidateType())
 		{
 			case CANDIDATE_NON_OPAQUE_TRIANGLE:
-			{
+            {
                 uint instance_idx = ray_query.CandidateInstanceIndex();
                 uint primitive_idx = ray_query.CandidatePrimitiveIndex();
 
@@ -46,11 +46,11 @@ void TracePrimaryRay(RayDesc ray, inout PrimaryRayPayload payload, uint2 pixel_p
                 RT_Triangle hit_triangle = GetHitTriangle(instance_data.triangle_buffer_idx, primitive_idx);
                 float hit_distance = ray_query.CandidateTriangleRayT();
 
-				Material hit_material;
+                Material hit_material;
 
                 bool valid_hit = true;
 
-                if (tweak.retrace_rays && payload.start_segment != -1)  // retrace rays to handle intersecting level segments
+                /*if (tweak.retrace_rays && payload.start_segment != -1)  // retrace rays to handle intersecting level segments
                 {
                    // bool found = false;
 
@@ -93,7 +93,7 @@ void TracePrimaryRay(RayDesc ray, inout PrimaryRayPayload payload, uint2 pixel_p
                                     valid_hit = false;
                                 }
                             }
-                           
+
                         }
                         else
                         {
@@ -101,11 +101,30 @@ void TracePrimaryRay(RayDesc ray, inout PrimaryRayPayload payload, uint2 pixel_p
                         }
                     }
 
+                }*/
+
+                // check visibility table
+
+                //g_global_cb.ray_segment;
+                //g_global_cb.num_segments;
+                //g_visibility_table_buffer;
+                //hit_triangle.segment;
+
+                bool segment_visible = true;
+
+                if (hit_triangle.segment != -1)
+                {
+                    uint visibility_table_stride = (g_global_cb.num_segments + 31) / 32;
+                    uint wordIndex = hit_triangle.segment / 32;
+                    uint bitIndex = hit_triangle.segment % 32;
+                    uint table_index = payload.start_segment * visibility_table_stride + wordIndex;
+
+                    segment_visible = (g_visibility_table_buffer[table_index] & (1U << bitIndex)) != 0;
                 }
 
 				// Check for transparency on hit candidate
                
-                if (valid_hit && !IsHitTransparent(
+                if (valid_hit && segment_visible && !IsHitTransparent(
                     instance_idx,
                     primitive_idx,
                     ray_query.CandidateTriangleBarycentrics(),
